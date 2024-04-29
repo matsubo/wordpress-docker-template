@@ -116,6 +116,12 @@ wordpress-docker-template-mysql-1      | 2024-04-29T17:00:21.753029Z 0 [System] 
 ```
 
 
+## Usage
+
+```
+% open 'http://localhost:8080/'
+```
+
 ## Stop
 
 ```
