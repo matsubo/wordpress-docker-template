@@ -128,3 +128,27 @@ wordpress-docker-template-mysql-1      | 2024-04-29T17:00:21.753029Z 0 [System] 
 % docker compose down
 ```
 
+## Backup
+
+```
+% docker compose down
+% tar jcf /path/to/backup.tar.bz2 .
+```
+
+## Restore
+
+```
+% tar xf /path/to/backup.tar.bz2
+```
+
+
+## Import from existing wordpress
+
+```
+% cp -ra /old/wordpress/wp-content/{plugins,themes,uploads} wordpress/
+% mysqldump -u ${OLD_MYSQL_USER} --password=${OLD_MYSQL_PASSWORD} ${OLD_MYSQL_DB_NAME} | bzip2 > dump.sql.bz2
+% docker compose cp dump.sql.bz2 mysql:/dump.sql.bz2
+% docker compose exec mysql bash -c 'bzcat /dump.sql.bz2 | mysql -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE'
+% docker compose exec mysql bash rm /dump.sql.bz2
+```
+
