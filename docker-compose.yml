@@ -1,35 +1,52 @@
 services:
   mysql:
+    image: mysql:8.4
     user: "${UID:-1000}:${GID:-1000}"
-    image: mysql:latest
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./mysql/data:/var/lib/mysql
-      - ./mysql/conf/custom.cnf:/etc/mysql/conf.d/custom.cnf
+      - ./mysql/conf/custom.cnf:/etc/mysql/conf.d/custom.cnf:ro
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-wordpress}
-      MYSQL_USER: ${MYSQL_USER:-root}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-wordpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    healthcheck:
+      # TCP ping fails while the entrypoint's socket-only init server is running,
+      # so WordPress starts only after the real server accepts connections.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   wordpress:
-    image: wordpress:latest
-    user: "${UID:-1000}:${GID:-1000}"
-    restart: always
+    build:
+      context: ./docker/wordpress
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${EXPOSE_PORT:-8080}:80"
     volumes:
       - ./wordpress/themes:/var/www/html/wp-content/themes
       - ./wordpress/plugins:/var/www/html/wp-content/plugins
       - ./wordpress/uploads:/var/www/html/wp-content/uploads
-      - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
-    links:
-      - mysql
-    depends_on:
-      - mysql
-    ports:
-      - "${EXPOSE_PORT:-8080}:80"
+      - ./php/custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
     environment:
       WORDPRESS_DB_HOST: mysql
       WORDPRESS_DB_NAME: ${MYSQL_DATABASE:-wordpress}
-      WORDPRESS_DB_USER: ${MYSQL_USER:-root}
-      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
-
+      WORDPRESS_DB_USER: ${MYSQL_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    healthcheck:
+      # A static file: answers only after the entrypoint has copied WordPress core
+      # and Apache is listening, without depending on the database or redirects.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost/wp-includes/images/blank.gif"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
